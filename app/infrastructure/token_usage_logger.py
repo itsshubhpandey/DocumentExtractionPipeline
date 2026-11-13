@@ -2,9 +2,9 @@ import logging
 import os
 from typing import Any
 
-import httpx
 from litellm import cost_per_token
 from app.infrastructure.database import get_database
+from app.infrastructure.mongo_log_store import insert_token_usage
 
 logger = logging.getLogger(__name__)
 
@@ -261,24 +261,24 @@ class TokenUsageService:
         return TokenUsageService._format_cost_value(input_cost + output_cost)
 
     @staticmethod
-    async def log_usage(api_url: str, payload: dict, token: str):
+    async def log_usage(
+        api_url: str | None = None,
+        payload: dict | None = None,
+        token: str | None = None,
+    ) -> dict:
+        del api_url, token  # Retained in the signature for caller compatibility.
+        if payload is None:
+            raise ValueError("payload is required")
 
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        }
-
-        async with httpx.AsyncClient(timeout=30) as client:
-
-            response = await client.post(
-                api_url,
-                json=payload,
-                headers=headers,
-            )
-
-            response.raise_for_status()
-
-            return response.json()
+        try:
+            return await insert_token_usage(payload)
+        except Exception as ex:
+            logger.warning("Token usage MongoDB insert failed: %s", ex)
+            return {
+                "success": False,
+                "message": "Token usage MongoDB insert failed",
+                "error": str(ex),
+            }
 
     @staticmethod
     async def log_agent_usage(
@@ -338,15 +338,7 @@ class TokenUsageService:
             "tenderId": request.TenderId,
         }
 
-        api_url = os.getenv("AI_USAGE_LOG_API")
-
-        if not api_url:
-            raise ValueError(
-                "AI_USAGE_LOG_API is not configured in the .env file."
-            )
-
         return await TokenUsageService.log_usage(
-            api_url=api_url,
             payload=payload,
-            token=request.JwtToken,
+            token=getattr(request, "JwtToken", None),
         )

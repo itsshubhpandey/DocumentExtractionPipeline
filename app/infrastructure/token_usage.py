@@ -517,11 +517,11 @@ import os
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
-import httpx
 from dotenv import load_dotenv
 from litellm import cost_per_token
 
 from app.infrastructure.database import get_database
+from app.infrastructure.mongo_log_store import insert_token_usage
 
 
 load_dotenv(
@@ -538,13 +538,6 @@ def _parse_bool(value: Optional[str], default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _parse_float(value: Optional[str], default: float) -> float:
-    try:
-        return float(value) if value is not None else default
-    except (TypeError, ValueError):
-        return default
-
-
 class TokenUsageService:
     @staticmethod
     def _is_enabled() -> bool:
@@ -558,13 +551,6 @@ class TokenUsageService:
         return _parse_bool(
             os.getenv("AI_USAGE_DEBUG_PRINT"),
             default=False,
-        )
-
-    @staticmethod
-    def _timeout_seconds() -> float:
-        return _parse_float(
-            os.getenv("AI_USAGE_LOG_TIMEOUT"),
-            10.0,
         )
 
     @staticmethod
@@ -866,28 +852,6 @@ class TokenUsageService:
                 input_cost + output_cost
             ),
         }
-
-    @staticmethod
-    def _get_usage_log_api_url() -> Optional[str]:
-        api_url = (
-            os.getenv("AI_USAGE_LOG_API_URL")
-            or os.getenv("AI_USAGE_LOG_API")
-            or os.getenv("TOKEN_USAGE_LOG_API")
-            or os.getenv("TOKEN_USAGE")
-            or os.getenv("Token_UASAGE")
-            or os.getenv("Token_USAGE")
-        )
-
-        if TokenUsageService._debug_enabled():
-            print(
-                "[TOKEN DEBUG] Usage API URL:",
-                api_url,
-            )
-
-        if not api_url:
-            return None
-
-        return api_url.strip().strip("\"'")
 
     @staticmethod
     def _required_string(value: Any) -> str:
@@ -1337,10 +1301,6 @@ class TokenUsageService:
 
             return result
 
-        api_url = (
-            TokenUsageService._get_usage_log_api_url()
-        )
-
         debug_enabled = (
             TokenUsageService._debug_enabled()
         )
@@ -1349,19 +1309,7 @@ class TokenUsageService:
             print(
                 "\n========== TOKEN USAGE DEBUG =========="
             )
-            print("API URL:", api_url)
-            print(
-                "Bearer Token Present:",
-                bool(bearer_token),
-            )
-            print(
-                "Bearer Token Length:",
-                (
-                    len(bearer_token)
-                    if bearer_token
-                    else 0
-                ),
-            )
+            print("Destination: MongoDB TokenUsageLog")
             print(
                 "Payload Before Normalize:",
                 payload,
@@ -1370,56 +1318,7 @@ class TokenUsageService:
                 "=======================================\n"
             )
 
-        if not api_url:
-            print(
-                "❌ TOKEN LOG SKIPPED: API URL MISSING"
-            )
-
-            logger.warning(
-                "Token usage logging skipped: "
-                "AI_USAGE_LOG_API_URL / "
-                "AI_USAGE_LOG_API is not configured"
-            )
-
-            return {
-                "success": False,
-                "skipped": True,
-                "reason": (
-                    "AI usage API URL "
-                    "is not configured"
-                ),
-            }
-
-        if not bearer_token:
-            print(
-                "❌ TOKEN LOG SKIPPED: "
-                "BEARER TOKEN MISSING"
-            )
-
-            logger.warning(
-                "Token usage logging skipped: "
-                "bearer_token is required"
-            )
-
-            return {
-                "success": False,
-                "skipped": True,
-                "reason": (
-                    "bearer_token is required"
-                ),
-            }
-
-        token = bearer_token.strip()
-
-        headers = {
-            "Authorization": (
-                token
-                if token.lower().startswith(
-                    "bearer "
-                )
-                else f"Bearer {token}"
-            )
-        }
+        del bearer_token  # Direct MongoDB persistence needs no HTTP token.
 
         normalized_payload = (
             TokenUsageService._normalize_usage_payload(
@@ -1429,146 +1328,35 @@ class TokenUsageService:
 
         if debug_enabled:
             print(
-                "✅ TOKEN LOG REQUEST ABOUT TO SEND"
+                "✅ TOKEN LOG MONGODB INSERT ABOUT TO RUN"
             )
             print(
                 "Normalized Payload:",
                 normalized_payload,
             )
 
-        timeout = (
-            TokenUsageService._timeout_seconds()
-        )
-
-        async with httpx.AsyncClient(
-            timeout=timeout
-        ) as client:
-            try:
-                response = await client.post(
-                    api_url,
-                    json=normalized_payload,
-                    headers=headers,
-                )
-
-                if debug_enabled:
-                    print(
-                        "TOKEN LOG STATUS:",
-                        response.status_code,
-                    )
-                    print(
-                        "TOKEN LOG RESPONSE:",
-                        response.text[:2000],
-                    )
-
-                if response.status_code == 404:
-                    alternate_api_url = (
-                        api_url.rstrip("/")
-                        if api_url.endswith("/")
-                        else f"{api_url}/"
-                    )
-
-                    if alternate_api_url != api_url:
-                        if debug_enabled:
-                            print(
-                                "[TOKEN DEBUG] Retrying:",
-                                alternate_api_url,
-                            )
-
-                        response = await client.post(
-                            alternate_api_url,
-                            json=normalized_payload,
-                            headers=headers,
-                        )
-
-                        if debug_enabled:
-                            print(
-                                "TOKEN LOG RETRY STATUS:",
-                                response.status_code,
-                            )
-                            print(
-                                "TOKEN LOG RETRY RESPONSE:",
-                                response.text[:2000],
-                            )
-
-                response.raise_for_status()
-
-                print(
-                    "✅ TOKEN USAGE LOGGED SUCCESSFULLY"
-                )
-
-                try:
-                    result = response.json()
-                except ValueError:
-                    result = {
-                        "rawResponse": response.text
-                    }
-
-                if isinstance(result, dict):
-                    result.setdefault(
-                        "success",
-                        True,
-                    )
-                    return result
-
-                return {
-                    "success": True,
-                    "response": result,
-                }
-
-            except httpx.HTTPStatusError as ex:
-                print(
-                    "❌ TOKEN LOG HTTP ERROR:",
-                    ex.response.status_code,
-                    ex.response.text[:2000],
-                )
-
-                logger.warning(
-                    "Token usage logging failed "
-                    "with status %s: %s",
-                    ex.response.status_code,
-                    ex.response.text,
-                )
-
-                return {
-                    "success": False,
-                    "status_code": (
-                        ex.response.status_code
-                    ),
-                    "message": (
-                        "Token usage logging failed"
-                    ),
-                    "response": (
-                        ex.response.text
-                    ),
-                }
-
-            except httpx.HTTPError as ex:
-                print(
-                    "❌ TOKEN LOG REQUEST ERROR:",
-                    str(ex),
-                )
-
-                logger.warning(
-                    "Token usage logging "
-                    "request failed: %s",
-                    ex,
-                )
-
-                return {
-                    "success": False,
-                    "message": (
-                        "Token usage logging "
-                        "request failed"
-                    ),
-                    "error": str(ex),
-                }
+        try:
+            result = await insert_token_usage(normalized_payload)
+            if debug_enabled:
+                print("✅ TOKEN USAGE SAVED TO MONGODB:", result)
+            return result
+        except Exception as ex:
+            logger.warning(
+                "Token usage MongoDB insert failed: %s",
+                ex,
+            )
+            return {
+                "success": False,
+                "message": "Token usage MongoDB insert failed",
+                "error": str(ex),
+            }
 
     @staticmethod
     async def log_agent_usage(
         *,
         request: Any,
         token_usage: dict,
-        bearer_token: str,
+        bearer_token: Optional[str] = None,
         correlation_id: str,
         duration_ms: int,
         application_name: str,

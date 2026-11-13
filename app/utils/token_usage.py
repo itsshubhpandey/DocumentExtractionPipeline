@@ -1,11 +1,12 @@
 import json
 import os
-import httpx
 import logging
 from pathlib import Path
 from typing import Any, Optional
 
 from dotenv import load_dotenv
+
+from app.infrastructure.mongo_log_store import insert_token_usage
 
 try:
     from litellm import cost_per_token as litellm_cost_per_token
@@ -127,21 +128,6 @@ class TokenUsageService:
             "currency": currency,
             "value": round(input_cost + output_cost, 8),
         }
-
-    @staticmethod
-    def _get_usage_log_api_url() -> Optional[str]:
-        api_url = (
-            os.getenv("AI_USAGE_LOG_API")
-            or os.getenv("TOKEN_USAGE_LOG_API")
-            or os.getenv("TOKEN_USAGE")
-            or os.getenv("Token_UASAGE")
-            or os.getenv("Token_USAGE")
-        )
-
-        if not api_url:
-            return None
-
-        return api_url.strip().strip("\"'")
 
     @staticmethod
     def _required_string(value: Any) -> str:
@@ -316,63 +302,18 @@ class TokenUsageService:
 
     @staticmethod
     async def log_usage(payload: dict, bearer_token: Optional[str] = None):
-        api_url = TokenUsageService._get_usage_log_api_url()
+        del bearer_token  # Authentication is not needed for direct MongoDB inserts.
+        normalized_payload = TokenUsageService._normalize_usage_payload(payload)
 
-        if not api_url:
-            logger.warning("Token usage logging skipped: AI_USAGE_LOG_API is not configured")
-            return None
-
-        headers = {}
-        if bearer_token:
-            token = bearer_token.strip()
-            if token.lower().startswith("bearer "):
-                headers["Authorization"] = token
-            else:
-                headers["Authorization"] = f"Bearer {token}"
-        else:
-            logger.warning("Token usage logging skipped: bearer_token is required")
-            return None
-
-        async with httpx.AsyncClient(timeout=30) as client:
-            try:
-                payload = TokenUsageService._normalize_usage_payload(payload)
-                response = await client.post(api_url, json=payload, headers=headers)
-
-                if response.status_code == 404:
-                    alternate_api_url = (
-                        api_url.rstrip("/")
-                        if api_url.endswith("/")
-                        else f"{api_url}/"
-                    )
-
-                    if alternate_api_url != api_url:
-                        response = await client.post(
-                            alternate_api_url,
-                            json=payload,
-                            headers=headers,
-                        )
-
-                response.raise_for_status()
-                return response.json()
-
-            except httpx.HTTPStatusError as ex:
-                logger.warning(
-                    "Token usage logging failed with status %s: %s",
-                    ex.response.status_code,
-                    ex.response.text,
-                )
-                return {
-                    "success": False,
-                    "status_code": ex.response.status_code,
-                    "message": "Token usage logging failed",
-                }
-
-            except httpx.HTTPError as ex:
-                logger.warning("Token usage logging request failed: %s", ex)
-                return {
-                    "success": False,
-                    "message": "Token usage logging request failed",
-                }
+        try:
+            return await insert_token_usage(normalized_payload)
+        except Exception as ex:
+            logger.warning("Token usage MongoDB insert failed: %s", ex)
+            return {
+                "success": False,
+                "message": "Token usage MongoDB insert failed",
+                "error": str(ex),
+            }
                 
  
  

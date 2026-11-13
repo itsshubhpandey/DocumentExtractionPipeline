@@ -9,8 +9,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import requests
 from dotenv import load_dotenv
+
+from app.infrastructure.mongo_log_store import (
+    enterprise_log_collection_name,
+    insert_enterprise_log,
+)
 
 
 load_dotenv(
@@ -27,13 +31,6 @@ def _parse_bool(value: Optional[str], default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _parse_int(value: Optional[str], default: int) -> int:
-    try:
-        return int(value) if value is not None else default
-    except (TypeError, ValueError):
-        return default
-
-
 class Logging:
     def __init__(
         self,
@@ -47,18 +44,9 @@ class Logging:
             default=True,
         )
 
-        self.base_url = (
-            os.getenv("LOG_URL") or ""
-        ).strip().strip("\"'")
+        self.collection_name = enterprise_log_collection_name()
 
-        self.timeout = (
-            timeout
-            if timeout is not None
-            else _parse_int(
-                os.getenv("LOG_TIMEOUT_SECONDS"),
-                10,
-            )
-        )
+        del timeout  # Kept in the public constructor for compatibility.
 
         self.agent_name = agent_name
         self.source_module = source_module
@@ -83,15 +71,9 @@ class Logging:
             {
                 "agentName": self.agent_name,
                 "enabled": self.enabled,
-                "urlPresent": bool(self.base_url),
-                "timeoutSeconds": self.timeout,
+                "collection": self.collection_name,
             },
         )
-
-        if self.enabled and not self.base_url:
-            raise ValueError(
-                "LOG_URL is not set while LOG_ENABLED=true."
-            )
 
     def _build_debug_logger(self) -> logging.Logger:
         debug_logger = logging.getLogger(
@@ -159,68 +141,45 @@ class Logging:
                 payload or {},
                 default=str,
             ),
+            "payload": payload or {},
             "correlationId": correlation_id,
         }
 
         print("\n========== ENTERPRISE LOG DEBUG ==========")
         print("Event Type:", event_type)
         print("Correlation ID:", correlation_id)
-        print("LOG URL:", self.base_url)
+        print("MongoDB collection:", self.collection_name)
         print("Payload:", payload or {})
         print("==========================================\n")
 
         terminal_logger.info(
-            "[EnterpriseLogger] submission started | event=%s | correlation_id=%s",
+            "[EnterpriseLogger] MongoDB insert started | event=%s | correlation_id=%s",
             event_type,
             correlation_id,
         )
 
         try:
-            response = requests.post(
-                self.base_url,
-                json=log_payload,
-                timeout=self.timeout,
-            )
+            result = insert_enterprise_log(log_payload)
 
-            print(
-                "[ENTERPRISE LOG DEBUG] HTTP status:",
-                response.status_code,
-            )
-            print(
-                "[ENTERPRISE LOG DEBUG] HTTP body:",
-                response.text[:2000],
-            )
-
-            response.raise_for_status()
-
-            print("✅ ENTERPRISE LOG SUBMITTED SUCCESSFULLY")
+            print("✅ ENTERPRISE LOG SAVED TO MONGODB")
 
             terminal_logger.info(
-                "[EnterpriseLogger] submitted successfully | event=%s | status=%s | correlation_id=%s",
+                "[EnterpriseLogger] saved successfully | event=%s | collection=%s | correlation_id=%s",
                 event_type,
-                response.status_code,
+                result["collection"],
                 correlation_id,
             )
 
-            try:
-                result = response.json()
-            except ValueError:
-                result = {"rawResponse": response.text}
+            return result
 
-            if isinstance(result, dict):
-                result.setdefault("success", True)
-                return result
-
-            return {"success": True, "response": result}
-
-        except requests.RequestException as exc:
+        except Exception as exc:
             print(
-                "❌ ENTERPRISE LOG SUBMISSION FAILED:",
+                "❌ ENTERPRISE LOG MONGODB INSERT FAILED:",
                 str(exc),
             )
 
             terminal_logger.warning(
-                "[EnterpriseLogger] submission failed | event=%s | correlation_id=%s | error=%s",
+                "[EnterpriseLogger] MongoDB insert failed | event=%s | correlation_id=%s | error=%s",
                 event_type,
                 correlation_id,
                 exc,

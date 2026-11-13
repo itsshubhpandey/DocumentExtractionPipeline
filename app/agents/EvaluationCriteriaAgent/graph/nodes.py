@@ -31,8 +31,6 @@ import os
 import re
 import time
 import unicodedata
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
@@ -180,27 +178,6 @@ class AgentLogging:
 # =============================================================================
 # 6. Usage Tracker
 # =============================================================================
-
-
-class OpenAIUsageLogger:
-    """Best-effort client for the central .NET OpenAI usage API."""
-
-    def __init__(self) -> None:
-        self.url = _ec_env("OPENAI_USAGE_LOGGER_URL", "").strip()
-        self.timeout = float(_ec_env("OPENAI_USAGE_LOGGER_TIMEOUT", "5"))
-
-    def post(self, record: OpenAIUsageRecord) -> None:
-        if not self.url:
-            logging.warning("OPENAI_USAGE_LOGGER_URL is not configured; usage telemetry skipped.")
-            return
-        payload = json.dumps(record.__dict__).encode("utf-8")
-        request = urllib.request.Request(self.url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                if not 200 <= response.status < 300:
-                    raise LoggerError(f"Usage logger returned HTTP {response.status}.")
-        except Exception as exc:
-            logging.warning("OpenAI usage telemetry unavailable: %s", exc)
 
 
 # =============================================================================
@@ -1276,7 +1253,6 @@ def create_openai_extraction(
             tender_id=llm_input.get("TenderContext", {}).get("TenderId"),
             agent_name=_ec_env("AGENT_NAME", "Evaluation Criteria Agent"), success=success,
         )
-        OpenAIUsageLogger().post(record)
         from app.infrastructure.token_usage import TokenUsageService
 
         usage_context = usage_context or {}
@@ -1284,47 +1260,35 @@ def create_openai_extraction(
             import asyncio
             from types import SimpleNamespace
 
-            jwt_token = usage_context.get("jwt_token")
-            if jwt_token:
-                logging.getLogger("uvicorn.error").info(
-                    "[AIUsageLogger] submission started | run_id=%s",
-                    usage_context.get("run_id", ""),
+            logging.getLogger("uvicorn.error").info(
+                "[AIUsageLogger] MongoDB insert started | run_id=%s",
+                usage_context.get("run_id", ""),
+            )
+            request_like = SimpleNamespace(
+                company_id=record.company_id,
+                tender_id=record.tender_id,
+                user_id=usage_context.get("user_id", ""),
+                project_id=usage_context.get("project_id", ""),
+            )
+            asyncio.run(
+                TokenUsageService.log_agent_usage(
+                    request=request_like,
+                    token_usage={
+                        "input_tokens": record.input_tokens,
+                        "output_tokens": record.output_tokens,
+                        "total_tokens": record.total_tokens,
+                        "model": record.model,
+                    },
+                    bearer_token=usage_context.get("jwt_token"),
+                    correlation_id=usage_context.get("run_id", ""),
+                    duration_ms=int(round(record.latency * 1000)),
+                    application_name=_ec_env("AI_USAGE_APPLICATION_NAME", "Tender"),
+                    agent_name=_ec_env("AGENT_NAME", "Evaluation Criteria Agent"),
+                    purpose="Evaluation Criteria extraction",
+                    usage_type="LLM",
+                    method="Lite LLM structured output",
                 )
-                # Route through the shared helper (same one every other agent uses)
-                # instead of hand-building the payload, so this agent automatically
-                # inherits future shared-format fixes -- e.g. sourceIds only ever
-                # carrying Company/Tender entries, with projectId kept as its own
-                # top-level field rather than a third sourceIds entry.
-                request_like = SimpleNamespace(
-                    company_id=record.company_id,
-                    tender_id=record.tender_id,
-                    user_id=usage_context.get("user_id", ""),
-                    project_id=usage_context.get("project_id", ""),
-                )
-                asyncio.run(
-                    TokenUsageService.log_agent_usage(
-                        request=request_like,
-                        token_usage={
-                            "input_tokens": record.input_tokens,
-                            "output_tokens": record.output_tokens,
-                            "total_tokens": record.total_tokens,
-                            "model": record.model,
-                        },
-                        bearer_token=jwt_token,
-                        correlation_id=usage_context.get("run_id", ""),
-                        duration_ms=int(round(record.latency * 1000)),
-                        application_name=_ec_env("AI_USAGE_APPLICATION_NAME", "Tender"),
-                        agent_name=_ec_env("AGENT_NAME", "Evaluation Criteria Agent"),
-                        purpose="Evaluation Criteria extraction",
-                        usage_type="LLM",
-                        method="Lite LLM structured output",
-                    )
-                )
-            else:
-                logging.getLogger("uvicorn.error").warning(
-                    "[AIUsageLogger] skipped: JwtToken was not provided | run_id=%s",
-                    usage_context.get("run_id", ""),
-                )
+            )
         except Exception as exc:
             logging.warning("Shared token usage logging unavailable: %s", exc)
         logging.info("OpenAI usage | input=%s | output=%s | total=%s | cost=%.6f | latency=%.2fs",
