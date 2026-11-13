@@ -155,10 +155,6 @@
                   <label for="description">Document description</label>
                   <textarea id="description" placeholder="Optional text to store before OCR completes"></textarea>
                 </div>
-                <div class="field wide">
-                  <label for="summary">OCR summary</label>
-                  <textarea id="summary" placeholder="Optional; the pipeline will replace this with extracted OCR metadata"></textarea>
-                </div>
               </div>
               <div class="actions">
                 <button id="submitButton" type="submit">Upload and process</button>
@@ -169,7 +165,7 @@
         </section>
 
         <div class="stack">
-          <section id="mongoResultsCard" class="card" hidden>
+          <section class="card">
             <div class="card-head">
               <div>
                 <h2>2. Pipeline status</h2>
@@ -189,7 +185,7 @@
             </div>
           </section>
 
-          <section id="apiResultsCard" class="card" hidden>
+          <section id="mongoResultsCard" class="card" hidden>
             <div class="card-head">
               <div>
                 <h2>3. Mongo payload</h2>
@@ -205,7 +201,7 @@
             </div>
           </section>
 
-          <section class="card">
+          <section id="apiResultsCard" class="card" hidden>
             <div class="card-head"><div><h2>API responses</h2><p class="hint">Upload and queue responses are kept here for debugging.</p></div></div>
             <div class="card-body"><div class="json"><textarea id="responsePayload" readonly placeholder="Responses will appear here."></textarea><button class="copy" type="button" data-copy="responsePayload">Copy</button></div></div>
           </section>
@@ -276,7 +272,6 @@
             const data = await readJson(response);
             if (!response.ok) throw new Error(data.detail || `Document lookup failed (${response.status})`);
             const payload = data.document_payload || {};
-            $("afterPayload").value = pretty(payload);
             const active = payload.IsActive === true;
             const processed = String(payload.Status || "").toLowerCase() === "processed";
             if (active && processed) {
@@ -327,7 +322,6 @@
           form.append("user_name", value("userName"));
           form.append("blob_id", value("blobId"));
           form.append("document_description", value("description"));
-          form.append("ocr_summary", value("summary"));
 
           const uploadResponse = await fetch(apiUrl("/documents/upload/tender-document"), { method: "POST", body: form });
           const uploadData = await readJson(uploadResponse);

@@ -36,6 +36,7 @@ class TenderDocumentUploadTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('id="apiResultsCard" class="card" hidden', frontend)
         self.assertIn("showCompletedResults(payload);", frontend)
         self.assertIn("if (active && processed)", frontend)
+        self.assertNotIn('id="summary"', frontend)
 
     async def test_upload_saves_file_and_creates_inactive_mongo_record(self):
         collection = _FakeCollection()
