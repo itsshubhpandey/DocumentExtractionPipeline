@@ -1,0 +1,8 @@
+flowchart LR
+    start([Start]) --> requirements[(TenderRequirements)]
+    requirements --> pending[Select requirements not deduplicated]
+    pending --> group[Group similar intent and type]
+    group --> dedupe[Deduplication agent]
+    dedupe --> store[(TenderRequirementDeduplications)]
+    store --> audit[Save deduplication result]
+    audit --> finish([Deduplication complete])

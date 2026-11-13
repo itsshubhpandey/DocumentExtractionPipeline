@@ -1,0 +1,21 @@
+docling
+fastapi
+numpy<2
+opencv-python==4.8.1.78
+pypdfium2==4.30.0
+python-multipart
+transformers<5
+uvicorn
+langchain-text-splitters
+langchain-openai
+langchain-litellm
+langchain-ollama
+dotenv
+qdrant-client
+langchain-mistralai
+fastembed
+litellm
+motor
+aio-pika
+# celery>=5.4.0
+# redis>=5.0.0

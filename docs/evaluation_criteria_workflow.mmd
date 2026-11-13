@@ -1,0 +1,10 @@
+flowchart LR
+    start([Start]) --> check{Evaluation document available?}
+    check -->|No| skip[Skip evaluation stage]
+    skip --> finish([Stage complete])
+    check -->|Yes| chunks[(CPTenderDoc)]
+    chunks --> retrieve[Retrieve evaluation evidence]
+    retrieve --> agent[Evaluation criteria agent]
+    agent --> map[Map evidence to chunks]
+    map --> store[(Evaluation criteria results)]
+    store --> finish

@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tender document upload</title>
+    <style>
+      :root {
+        --ink: #172338;
+        --muted: #667386;
+        --line: #dce3eb;
+        --paper: #f5f7fa;
+        --card: #fff;
+        --blue: #2563eb;
+        --blue-dark: #1d4ed8;
+        --green: #13845b;
+        --amber: #a46616;
+        --red: #c43c48;
+        --shadow: 0 20px 55px rgba(23, 35, 56, .09);
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 8% 0, #e2edff 0, transparent 29%),
+          radial-gradient(circle at 100% 0, #f8ead6 0, transparent 28%),
+          var(--paper);
+        font: 15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      .shell { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 42px 0 64px; }
+      .eyebrow { color: var(--blue); font-size: 11px; font-weight: 850; letter-spacing: .15em; text-transform: uppercase; }
+      h1 { max-width: 750px; margin: 11px 0 9px; font-size: clamp(34px, 5vw, 60px); line-height: 1; letter-spacing: -.05em; }
+      h2 { margin: 0; font-size: 19px; letter-spacing: -.025em; }
+      h3 { margin: 0; font-size: 13px; }
+      p { color: var(--muted); }
+      .lead { max-width: 690px; margin: 0 0 30px; font-size: 17px; }
+      .grid { display: grid; grid-template-columns: minmax(0, .92fr) minmax(390px, 1.08fr); gap: 20px; align-items: start; }
+      .stack { display: grid; gap: 20px; }
+      .card { overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,.94); box-shadow: var(--shadow); }
+      .card-head { display: flex; justify-content: space-between; align-items: start; gap: 14px; padding: 21px 23px 0; }
+      .card-body { padding: 20px 23px 23px; }
+      .hint { margin: 5px 0 0; font-size: 13px; }
+      .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      .field { display: grid; gap: 6px; }
+      .wide { grid-column: 1 / -1; }
+      label { color: #4d5a6b; font-size: 12px; font-weight: 750; }
+      input, textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 11px 12px;
+        color: var(--ink);
+        background: #fbfcfe;
+        font: inherit;
+        outline: none;
+      }
+      input:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,.12); background: #fff; }
+      input[type="file"] { padding: 9px; }
+      textarea { min-height: 92px; resize: vertical; }
+      .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 19px; }
+      button { border: 0; border-radius: 10px; padding: 11px 16px; color: #fff; background: var(--blue); cursor: pointer; font: 750 13px inherit; }
+      button:hover { background: var(--blue-dark); }
+      button:disabled { cursor: wait; opacity: .55; }
+      button.secondary { color: var(--ink); background: #e9eef5; }
+      .notice { margin: 0 0 18px; padding: 12px 13px; border-radius: 10px; color: #6b4c1e; background: #fff5e4; font-size: 12px; }
+      .status { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border-radius: 999px; color: var(--amber); background: #fff5df; font-size: 10px; font-weight: 850; letter-spacing: .09em; }
+      .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+      .status.working { color: var(--blue); background: #eaf1ff; }
+      .status.done { color: var(--green); background: #e7f7ef; }
+      .status.error { color: var(--red); background: #fff0f1; }
+      .steps { display: grid; gap: 9px; }
+      .step { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid #e6ebf0; border-radius: 11px; background: #fbfcfd; }
+      .step-icon { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; color: #758091; background: #eef1f4; font-size: 12px; font-weight: 850; }
+      .step-text { flex: 1; font-size: 12px; font-weight: 700; }
+      .step-state { color: #758091; font-size: 10px; font-weight: 850; letter-spacing: .08em; }
+      .step.done .step-icon { color: var(--green); background: #d8f2e5; }
+      .step.done .step-state { color: var(--green); }
+      .step.working .step-icon { color: var(--blue); background: #dce8ff; }
+      .step.working .step-state { color: var(--blue); }
+      .step.error .step-icon { color: var(--red); background: #ffe0e2; }
+      .step.error .step-state { color: var(--red); }
+      .payload-title { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+      .payload-title span { color: var(--muted); font-size: 11px; }
+      .json { position: relative; }
+      .json textarea { min-height: 280px; padding-top: 14px; color: #34435a; background: #f8fafc; font: 12px/1.55 "SFMono-Regular", Consolas, monospace; }
+      .copy { position: absolute; top: 9px; right: 9px; padding: 6px 9px; color: var(--muted); background: #e9eef5; font-size: 11px; }
+      .copy:hover { color: var(--ink); background: #dde5ef; }
+      .divider { height: 1px; margin: 20px 0; background: #e7ebef; }
+      .message { min-height: 20px; margin: 12px 0 0; color: var(--muted); font-size: 12px; }
+      .id-line { overflow: hidden; margin: 0 0 15px; color: var(--muted); font: 12px monospace; text-overflow: ellipsis; white-space: nowrap; }
+      code { padding: 2px 4px; border-radius: 4px; background: #eef2f7; font-size: .92em; }
+      @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
+      @media (max-width: 550px) { .shell { width: calc(100% - 22px); padding-top: 27px; } .form-grid { grid-template-columns: 1fr; } .wide { grid-column: auto; } .card-head, .card-body { padding-left: 17px; padding-right: 17px; } }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <div class="eyebrow">CPTenderDocuments upload console</div>
+      <h1>Upload once. Process the document end to end.</h1>
+      <p class="lead">The upload creates an inactive source record in MongoDB, calls your OCR orchestration endpoint, and watches the same record until the pipeline marks it active and processed.</p>
+
+      <div class="grid">
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <h2>1. Upload document</h2>
+              <p class="hint">The browser sends the file and metadata to the API. It never connects directly to MongoDB.</p>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="notice"><strong>Lifecycle:</strong> create <code>IsActive: false</code> → call OCR endpoint → pipeline writes classification/OCR data → set <code>IsActive: true</code> and <code>Status: "Processed"</code>.</div>
+            <form id="uploadForm">
+              <div class="form-grid">
+                <div class="field wide">
+                  <label for="file">Document file *</label>
+                  <input id="file" type="file" required accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg" />
+                </div>
+                <div class="field">
+                  <label for="sourceDocumentId">Document ID</label>
+                  <input id="sourceDocumentId" placeholder="Generated if empty" />
+                </div>
+                <div class="field">
+                  <label for="companyId">Company ID *</label>
+                  <input id="companyId" value="6a7091c7c104500e44abc1f5" required />
+                </div>
+                <div class="field">
+                  <label for="tenderId">Tender ID *</label>
+                  <input id="tenderId" value="6a708e41551f1cc0edbfed88" required />
+                </div>
+                <div class="field">
+                  <label for="ocid">OCID</label>
+                  <input id="ocid" value="ocds-b5fd17-c744a037-e570-4148-92b6-096e910ec57e" placeholder="Optional" />
+                </div>
+                <div class="field">
+                  <label for="projectId">Project ID</label>
+                  <input id="projectId" placeholder="Optional" />
+                </div>
+                <div class="field">
+                  <label for="createdBy">Created by</label>
+                  <input id="createdBy" value="Krishna Singh" />
+                </div>
+                <div class="field">
+                  <label for="userName">User name</label>
+                  <input id="userName" value="Krishna Singh" />
+                </div>
+                <div class="field">
+                  <label for="blobId">Blob ID</label>
+                  <input id="blobId" placeholder="Generated if empty" />
+                </div>
+                <div class="field wide">
+                  <label for="description">Document description</label>
+                  <textarea id="description" placeholder="Optional text to store before OCR completes"></textarea>
+                </div>
+                <div class="field wide">
+                  <label for="summary">OCR summary</label>
+                  <textarea id="summary" placeholder="Optional; the pipeline will replace this with extracted OCR metadata"></textarea>
+                </div>
+              </div>
+              <div class="actions">
+                <button id="submitButton" type="submit">Upload and process</button>
+                <button id="resetButton" class="secondary" type="button">Reset</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <div class="stack">
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <h2>2. Pipeline status</h2>
+                <p class="hint">The UI polls the document record created by the upload.</p>
+              </div>
+              <div id="status" class="status">IDLE</div>
+            </div>
+            <div class="card-body">
+              <div id="documentId" class="id-line">No document uploaded yet.</div>
+              <div class="steps">
+                <div id="stepUpload" class="step"><div class="step-icon">1</div><div class="step-text">Create upload and Mongo record</div><div class="step-state">WAITING</div></div>
+                <div id="stepQueue" class="step"><div class="step-icon">2</div><div class="step-text">Call OCR orchestration endpoint</div><div class="step-state">WAITING</div></div>
+                <div id="stepProcess" class="step"><div class="step-icon">3</div><div class="step-text">Process file and generate OCR metadata</div><div class="step-state">WAITING</div></div>
+                <div id="stepActive" class="step"><div class="step-icon">4</div><div class="step-text">Set IsActive true and Status Processed</div><div class="step-state">WAITING</div></div>
+              </div>
+              <p id="message" class="message">Choose a file and submit the form to begin.</p>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <h2>3. Mongo payload</h2>
+                <p class="hint">The first panel is the inserted inactive payload; the second is the live record after processing.</p>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="payload-title"><h3>Inserted into CPTenderDocuments</h3><span>IsActive: false</span></div>
+              <div class="json"><textarea id="beforePayload" readonly placeholder="The inserted payload will appear here."></textarea><button class="copy" type="button" data-copy="beforePayload">Copy</button></div>
+              <div class="divider"></div>
+              <div class="payload-title"><h3>Live payload after processing</h3><span>Expected: IsActive true</span></div>
+              <div class="json"><textarea id="afterPayload" readonly placeholder="The live Mongo payload will appear here."></textarea><button class="copy" type="button" data-copy="afterPayload">Copy</button></div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head"><div><h2>API responses</h2><p class="hint">Upload and queue responses are kept here for debugging.</p></div></div>
+            <div class="card-body"><div class="json"><textarea id="responsePayload" readonly placeholder="Responses will appear here."></textarea><button class="copy" type="button" data-copy="responsePayload">Copy</button></div></div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const frontendHost = window.location.hostname || "localhost";
+      const API_BASE_URL = (
+        window.location.port === "8001"
+          ? window.location.origin
+          : window.location.protocol + "//" + frontendHost + ":8001"
+      ).replace(/\/+$/, "");
+      let pollTimer = null;
+
+      const pretty = (value) => JSON.stringify(value, null, 2);
+      const value = (id) => $(id).value.trim();
+      const apiUrl = (path) => `${API_BASE_URL}${path}`;
+
+      function setStatus(text, type = "") {
+        $("status").textContent = text;
+        $("status").className = `status ${type}`;
+      }
+
+      function setStep(id, state, label) {
+        const step = $(id);
+        step.className = `step ${state}`;
+        step.querySelector(".step-state").textContent = label;
+      }
+
+      function setMessage(text) { $("message").textContent = text; }
+
+      async function readJson(response) {
+        const text = await response.text();
+        try { return text ? JSON.parse(text) : {}; }
+        catch (_) { return { raw: text }; }
+      }
+
+      async function pollDocument(documentId) {
+        let attempts = 0;
+        const check = async () => {
+          attempts += 1;
+          try {
+            const response = await fetch(apiUrl(`/documents/tender-document/${encodeURIComponent(documentId)}`));
+            const data = await readJson(response);
+            if (!response.ok) throw new Error(data.detail || `Document lookup failed (${response.status})`);
+            const payload = data.document_payload || {};
+            $("afterPayload").value = pretty(payload);
+            const active = payload.IsActive === true;
+            const processed = String(payload.Status || "").toLowerCase() === "processed";
+            if (active && processed) {
+              setStep("stepProcess", "done", "DONE");
+              setStep("stepActive", "done", "DONE");
+              setStatus("COMPLETED", "done");
+              setMessage("Document processing completed. Mongo now contains IsActive: true and Status: Processed.");
+              return;
+            }
+            setStep("stepProcess", "working", payload.Status || "PROCESSING");
+            setStatus("PROCESSING", "working");
+            setMessage(`Waiting for the worker… poll ${attempts}. Current status: ${payload.Status || "Pending"}.`);
+            if (attempts < 180) pollTimer = setTimeout(check, 2000);
+            else { setStatus("TIMEOUT", "error"); setMessage("The record is still inactive. Check that the tender worker and RabbitMQ are running."); }
+          } catch (error) {
+            setStatus("ERROR", "error");
+            setMessage(error.message);
+          }
+        };
+        await check();
+      }
+
+      $("uploadForm").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (pollTimer) clearTimeout(pollTimer);
+        const file = $("file").files[0];
+        if (!file) return;
+        $("submitButton").disabled = true;
+        setStatus("UPLOADING", "working");
+        setMessage("Uploading file and creating the inactive Mongo record…");
+        setStep("stepUpload", "working", "WORKING");
+        setStep("stepQueue", "", "WAITING");
+        setStep("stepProcess", "", "WAITING");
+        setStep("stepActive", "", "WAITING");
+        $("responsePayload").value = "";
+        $("afterPayload").value = "";
+        try {
+          const form = new FormData();
+          form.append("file", file);
+          form.append("document_id", value("sourceDocumentId"));
+          form.append("company_id", value("companyId"));
+          form.append("tender_id", value("tenderId"));
+          form.append("ocid", value("ocid"));
+          form.append("project_id", value("projectId"));
+          form.append("created_by", value("createdBy"));
+          form.append("user_name", value("userName"));
+          form.append("blob_id", value("blobId"));
+          form.append("document_description", value("description"));
+          form.append("ocr_summary", value("summary"));
+
+          const uploadResponse = await fetch(apiUrl("/documents/upload/tender-document"), { method: "POST", body: form });
+          const uploadData = await readJson(uploadResponse);
+          $("responsePayload").value = pretty({ upload: uploadData });
+          if (!uploadResponse.ok) throw new Error(uploadData.detail || `Upload failed (${uploadResponse.status})`);
+
+          const inserted = uploadData.document_payload;
+          const documentId = uploadData.document_id || inserted.DocumentId;
+          $("beforePayload").value = pretty(inserted);
+          $("documentId").textContent = `DocumentId: ${documentId}`;
+          setStep("stepUpload", "done", "INSERTED");
+          setStep("stepQueue", "working", "SENDING");
+          setStatus("QUEUING", "working");
+          setMessage("Mongo record created with IsActive: false. Calling OCR endpoint…");
+
+          const processUrl = apiUrl("/documents/process/ocr/using_Tenderid_or_Companyid");
+          $("responsePayload").value = pretty({
+            upload: uploadData,
+            process: { url: processUrl, status: "SENDING" }
+          });
+          const processResponse = await fetch(processUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              company_id: value("companyId"),
+              tender_id: value("tenderId"),
+              project_id: value("projectId"),
+              created_by: value("createdBy") || null,
+              user_id: "",
+              user_name: value("userName"),
+              bearer_token: null,
+              is_regenerated: false
+            })
+          });
+          const processData = await readJson(processResponse);
+          $("responsePayload").value = pretty({ upload: uploadData, process: processData });
+          if (!processResponse.ok) throw new Error(processData.detail || `Processing request failed (${processResponse.status})`);
+          setStep("stepQueue", "done", "QUEUED");
+          setStep("stepProcess", "working", "WAITING");
+          setStatus("QUEUED", "working");
+          setMessage("OCR endpoint accepted the job. Waiting for the worker to update Mongo…");
+          await pollDocument(documentId);
+        } catch (error) {
+          setStatus("ERROR", "error");
+          setMessage(error.message);
+          $("responsePayload").value = pretty({ error: error.message });
+        } finally {
+          $("submitButton").disabled = false;
+        }
+      });
+
+      $("resetButton").addEventListener("click", () => {
+        if (pollTimer) clearTimeout(pollTimer);
+        $("uploadForm").reset();
+        $("companyId").value = "6a7091c7c104500e44abc1f5";
+        $("tenderId").value = "6a708e41551f1cc0edbfed88";
+        $("ocid").value = "ocds-b5fd17-c744a037-e570-4148-92b6-096e910ec57e";
+        $("createdBy").value = "Krishna Singh";
+        $("userName").value = "Krishna Singh";
+        $("beforePayload").value = "";
+        $("afterPayload").value = "";
+        $("responsePayload").value = "";
+        $("documentId").textContent = "No document uploaded yet.";
+        ["stepUpload", "stepQueue", "stepProcess", "stepActive"].forEach((id) => setStep(id, "", "WAITING"));
+        setStatus("IDLE");
+        setMessage("Choose a file and submit the form to begin.");
+      });
+
+      document.querySelectorAll("[data-copy]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await navigator.clipboard.writeText($(button.dataset.copy).value);
+          const old = button.textContent;
+          button.textContent = "Copied";
+          setTimeout(() => { button.textContent = old; }, 900);
+        });
+      });
+    </script>
+  </body>
+</html>

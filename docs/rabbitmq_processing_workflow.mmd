@@ -1,0 +1,8 @@
+flowchart LR
+    client[Client or .NET wrapper] -->|Submit request| api[FastAPI]
+    api -->|Create queued job| job[(TenderDocumentsProcessingJobRMQ)]
+    api -.->|Publish message| queue[tender.processing queue]
+    queue -.->|Consume message| worker[Tender processing worker]
+    worker --> flow[Orchestration flow]
+    flow --> result[(MongoDB and Qdrant)]
+    flow --> status[Update job status]

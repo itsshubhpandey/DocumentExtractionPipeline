@@ -1,0 +1,12 @@
+flowchart LR
+    start([Start validation]) --> env[Validate environment variables]
+    env --> deps[Validate Python dependencies]
+    deps --> api[Submit document request]
+    api --> queue[Verify RabbitMQ queue]
+    queue --> worker[Run processing worker]
+    worker --> documents[Verify document processing]
+    documents --> chunks[Verify Qdrant chunks]
+    chunks --> agents[Verify all agents]
+    agents --> logs[Verify status and error logs]
+    logs --> report[Record validation results]
+    report --> finish([Validation complete])

@@ -1,0 +1,11 @@
+flowchart LR
+    start([Start]) --> documents[Process all documents]
+    documents --> ready{All documents complete?}
+    ready -->|No| wait[Wait for remaining documents]
+    wait --> documents
+    ready -->|Yes| chunks[(CPTenderDoc)]
+    chunks --> filter[Select new chunks]
+    filter --> rules[Rule-based filter]
+    rules --> llm[Requirement extraction agent]
+    llm --> store[(TenderRequirements)]
+    store --> finish([Requirement stage complete])

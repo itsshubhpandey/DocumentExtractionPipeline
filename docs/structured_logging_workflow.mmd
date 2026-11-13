@@ -1,0 +1,12 @@
+flowchart LR
+    start([Stage starts]) --> logStart[Create processing log]
+    logStart --> store[(TenderProcessingJobs)]
+    store --> execute[Execute pipeline stage]
+    execute --> check{Stage successful?}
+    check -->|Yes| complete[Mark stage completed]
+    complete --> next[Start next stage]
+    next --> finish([Pipeline complete])
+    check -->|No| failed[Save error and mark failed]
+    failed --> store
+    store --> resume[Retry failed stage]
+    resume --> execute
