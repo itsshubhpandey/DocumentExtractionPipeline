@@ -303,7 +303,6 @@ Example request:
 | `GET` | `/documents/tender-document/{document_id}` | Read the current tender document state |
 | `POST` | `/documents/process/ocr/using_Tenderid_or_Companyid` | Run or queue the complete pipeline |
 | `POST` | `/documents/process` | Process uploaded files directly as multipart form data |
-| `POST` | `/documents/process/section-documents` | Process company section documents |
 | `POST` | `/documents/retrieve` | Run dense similarity retrieval against Qdrant |
 | `DELETE` | `/documents/tender-document` | Delete one tender document and its Qdrant chunks |
 | `DELETE` | `/documents/company-documents` | Delete company documents and their Qdrant chunks |
