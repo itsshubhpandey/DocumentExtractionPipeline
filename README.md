@@ -191,6 +191,18 @@ cp .env.example .env
 Add your own credentials and service connection details to `.env`. Never commit
 the `.env` file.
 
+Start the API and open `http://localhost:8001` to use the document upload
+screen:
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+```
+
+The browser sends the selected file and metadata to FastAPI. The API stores the
+file in `DOCUMENT_UPLOAD_DIRECTORY`, inserts its source record into the
+configured tender-document MongoDB collection, and then starts the OCR flow.
+MongoDB credentials are never exposed to browser JavaScript.
+
 ## Core Configuration
 
 The exact values depend on your local or hosted services. The main configuration
@@ -206,6 +218,7 @@ MONGO_TLS="false"
 COMPANYDOCUMENTCOLLECTIONMONGO="CPDocuments"
 TENDERDOCUMENTCOLLECTIONMONGO="CPTenderDocuments"
 SECTIONDOCUMENTCOLLECTIONMONGO="SectionDocument"
+DOCUMENT_UPLOAD_DIRECTORY="app/infrastrature/documents/input_doc"
 COMPANYDOCUMENTCOLLECTIONQDRANT="CPDocuments"
 TENDERDOCUMENTCOLLECTIONQDRANT="CPTenderDoc"
 REQUIREMENT_QDRANT_COLLECTION_NAME="CPTenderDoc"

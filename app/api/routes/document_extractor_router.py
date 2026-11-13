@@ -118,6 +118,7 @@ def _uploaded_document_payload(
     document_id: str,
     tender_id: str,
     company_id: str,
+    project_id: str,
     blob_id: str,
     ocid: str | None,
     document_name: str,
@@ -133,6 +134,7 @@ def _uploaded_document_payload(
         "DocumentId": document_id,
         "TenderId": tender_id,
         "CompanyId": company_id,
+        "ProjectId": project_id,
         "BlobId": blob_id,
         "Ocid": ocid,
         "DocumentName": document_name,
@@ -231,7 +233,12 @@ async def process_documents(
             ),
         )
 
-    input_dir = Path("app/infrastrature/documents/input_doc")
+    input_dir = Path(
+        os.getenv(
+            "DOCUMENT_UPLOAD_DIRECTORY",
+            "app/infrastrature/documents/input_doc",
+        )
+    )
     input_dir.mkdir(parents=True, exist_ok=True)
     results = []
 
@@ -345,7 +352,12 @@ async def upload_tender_document(
         )
 
     document_name = Path(file.filename or "uploaded-document.pdf").name
-    input_dir = Path("app/infrastrature/documents/input_doc")
+    input_dir = Path(
+        os.getenv(
+            "DOCUMENT_UPLOAD_DIRECTORY",
+            "app/infrastrature/documents/input_doc",
+        )
+    )
     input_dir.mkdir(parents=True, exist_ok=True)
     saved_path = input_dir / f"{uuid4().hex}_{document_name}"
     resolved_blob_id = clean_optional_string(blob_id) or (
@@ -356,6 +368,7 @@ async def upload_tender_document(
         document_id=document_id,
         tender_id=tender_id,
         company_id=company_id,
+        project_id=project_id,
         blob_id=resolved_blob_id,
         ocid=ocid,
         document_name=document_name,

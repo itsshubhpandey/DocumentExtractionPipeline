@@ -20,6 +20,7 @@
       }
 
       * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
       body {
         margin: 0;
         color: var(--ink);
@@ -124,15 +125,15 @@
                 </div>
                 <div class="field">
                   <label for="companyId">Company ID *</label>
-                  <input id="companyId" value="6a7091c7c104500e44abc1f5" required />
+                  <input id="companyId" placeholder="Enter the company ID" required />
                 </div>
                 <div class="field">
                   <label for="tenderId">Tender ID *</label>
-                  <input id="tenderId" value="6a708e41551f1cc0edbfed88" required />
+                  <input id="tenderId" placeholder="Enter the tender ID" required />
                 </div>
                 <div class="field">
                   <label for="ocid">OCID</label>
-                  <input id="ocid" value="ocds-b5fd17-c744a037-e570-4148-92b6-096e910ec57e" placeholder="Optional" />
+                  <input id="ocid" placeholder="Optional" />
                 </div>
                 <div class="field">
                   <label for="projectId">Project ID</label>
@@ -140,11 +141,11 @@
                 </div>
                 <div class="field">
                   <label for="createdBy">Created by</label>
-                  <input id="createdBy" value="Krishna Singh" />
+                  <input id="createdBy" placeholder="Your name or user ID" />
                 </div>
                 <div class="field">
                   <label for="userName">User name</label>
-                  <input id="userName" value="Krishna Singh" />
+                  <input id="userName" placeholder="Optional display name" />
                 </div>
                 <div class="field">
                   <label for="blobId">Blob ID</label>
@@ -168,7 +169,7 @@
         </section>
 
         <div class="stack">
-          <section class="card">
+          <section id="mongoResultsCard" class="card" hidden>
             <div class="card-head">
               <div>
                 <h2>2. Pipeline status</h2>
@@ -188,7 +189,7 @@
             </div>
           </section>
 
-          <section class="card">
+          <section id="apiResultsCard" class="card" hidden>
             <div class="card-head">
               <div>
                 <h2>3. Mongo payload</h2>
@@ -221,6 +222,8 @@
           : window.location.protocol + "//" + frontendHost + ":8001"
       ).replace(/\/+$/, "");
       let pollTimer = null;
+      let uploadResult = null;
+      let processResult = null;
 
       const pretty = (value) => JSON.stringify(value, null, 2);
       const value = (id) => $(id).value.trim();
@@ -238,6 +241,25 @@
       }
 
       function setMessage(text) { $("message").textContent = text; }
+
+      function hideResults() {
+        $("mongoResultsCard").hidden = true;
+        $("apiResultsCard").hidden = true;
+        $("beforePayload").value = "";
+        $("afterPayload").value = "";
+        $("responsePayload").value = "";
+      }
+
+      function showCompletedResults(finalPayload) {
+        $("beforePayload").value = pretty(uploadResult?.document_payload || {});
+        $("afterPayload").value = pretty(finalPayload);
+        $("responsePayload").value = pretty({
+          upload: uploadResult,
+          process: processResult
+        });
+        $("mongoResultsCard").hidden = false;
+        $("apiResultsCard").hidden = false;
+      }
 
       async function readJson(response) {
         const text = await response.text();
@@ -258,6 +280,7 @@
             const active = payload.IsActive === true;
             const processed = String(payload.Status || "").toLowerCase() === "processed";
             if (active && processed) {
+              showCompletedResults(payload);
               setStep("stepProcess", "done", "DONE");
               setStep("stepActive", "done", "DONE");
               setStatus("COMPLETED", "done");
@@ -289,8 +312,9 @@
         setStep("stepQueue", "", "WAITING");
         setStep("stepProcess", "", "WAITING");
         setStep("stepActive", "", "WAITING");
-        $("responsePayload").value = "";
-        $("afterPayload").value = "";
+        uploadResult = null;
+        processResult = null;
+        hideResults();
         try {
           const form = new FormData();
           form.append("file", file);
@@ -307,12 +331,11 @@
 
           const uploadResponse = await fetch(apiUrl("/documents/upload/tender-document"), { method: "POST", body: form });
           const uploadData = await readJson(uploadResponse);
-          $("responsePayload").value = pretty({ upload: uploadData });
           if (!uploadResponse.ok) throw new Error(uploadData.detail || `Upload failed (${uploadResponse.status})`);
 
+          uploadResult = uploadData;
           const inserted = uploadData.document_payload;
           const documentId = uploadData.document_id || inserted.DocumentId;
-          $("beforePayload").value = pretty(inserted);
           $("documentId").textContent = `DocumentId: ${documentId}`;
           setStep("stepUpload", "done", "INSERTED");
           setStep("stepQueue", "working", "SENDING");
@@ -320,10 +343,6 @@
           setMessage("Mongo record created with IsActive: false. Calling OCR endpoint…");
 
           const processUrl = apiUrl("/documents/process/ocr/using_Tenderid_or_Companyid");
-          $("responsePayload").value = pretty({
-            upload: uploadData,
-            process: { url: processUrl, status: "SENDING" }
-          });
           const processResponse = await fetch(processUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -339,8 +358,8 @@
             })
           });
           const processData = await readJson(processResponse);
-          $("responsePayload").value = pretty({ upload: uploadData, process: processData });
           if (!processResponse.ok) throw new Error(processData.detail || `Processing request failed (${processResponse.status})`);
+          processResult = processData;
           setStep("stepQueue", "done", "QUEUED");
           setStep("stepProcess", "working", "WAITING");
           setStatus("QUEUED", "working");
@@ -349,7 +368,6 @@
         } catch (error) {
           setStatus("ERROR", "error");
           setMessage(error.message);
-          $("responsePayload").value = pretty({ error: error.message });
         } finally {
           $("submitButton").disabled = false;
         }
@@ -358,14 +376,9 @@
       $("resetButton").addEventListener("click", () => {
         if (pollTimer) clearTimeout(pollTimer);
         $("uploadForm").reset();
-        $("companyId").value = "6a7091c7c104500e44abc1f5";
-        $("tenderId").value = "6a708e41551f1cc0edbfed88";
-        $("ocid").value = "ocds-b5fd17-c744a037-e570-4148-92b6-096e910ec57e";
-        $("createdBy").value = "Krishna Singh";
-        $("userName").value = "Krishna Singh";
-        $("beforePayload").value = "";
-        $("afterPayload").value = "";
-        $("responsePayload").value = "";
+        uploadResult = null;
+        processResult = null;
+        hideResults();
         $("documentId").textContent = "No document uploaded yet.";
         ["stepUpload", "stepQueue", "stepProcess", "stepActive"].forEach((id) => setStep(id, "", "WAITING"));
         setStatus("IDLE");
